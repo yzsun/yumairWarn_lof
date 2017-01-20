@@ -12,24 +12,39 @@ class CompreWarn():
         deviceNum = len(self.potsDf)
         items_max = np.max(self.potsArr,0);items_min = np.min(self.potsArr,0)
         self.potsArr = self.normalization(self.potsArr,items_max,items_min) #normalization
-        self.deviceWarn = pd.DataFrame(index=self.potsDf.index,columns=['lof','dist','negNum'])
+        deviceWarn = pd.DataFrame(index=self.potsDf.index,columns=['lof','dist','negNum'])
         deviceAver = np.average(self.potsArr,0)
         for pot,device in zip(self.potsArr,self.potsDf.index):
             lof_value = self.local_outlier_factor(self.k,pot,self.potsArr)
-            self.deviceWarn['lof'][device] = lof_value
-            self.deviceWarn['dist'][device] = self.distEuclidean(pot,deviceAver)
-            self.deviceWarn['negNum'][device] = sum(map(lambda x:int(x),(pot-deviceAver)<0)) #Negative
-        # distance to average based warning
-        self.deviceWarnSort = self.deviceWarn.sort_values(by='dist')
-        self.deviceYellow = self.deviceWarnSort[int(deviceNum*0.0):]
-        self.deviceRed = self.deviceWarnSort[int(deviceNum*0.0):]
-        # lof based warning
-        self.deviceYellow = self.deviceYellow[np.logical_and(self.deviceYellow['lof']<self.red,self.deviceYellow['lof']>self.yellow)]
-        self.deviceRed = self.deviceRed[self.deviceRed['lof']>self.red]
-        # negative to average based warning
-        self.deviceYellow = list(self.deviceYellow.index[self.deviceYellow['negNum']<4])
-        self.deviceRed = list(self.deviceRed.index[self.deviceRed['negNum']<4])
+            deviceWarn['lof'][device] = lof_value
+            deviceWarn['dist'][device] = self.distEuclidean(pot,deviceAver)
+#            self.deviceWarn['negNum'][device] = sum(map(lambda x:int(x),(pot-deviceAver)<0)) #Negative
+        # 1.distance to average based warning
+        deviceWarnSort = deviceWarn.sort_values(by='dist')
+        deviceYellow = deviceWarnSort[int(deviceNum*0.0):]
+        deviceRed = deviceWarnSort[int(deviceNum*0.0):]
+        # 2. lof based warning
+        deviceYellow = deviceYellow[np.logical_and(deviceYellow['lof']<self.red,deviceYellow['lof']>self.yellow)]
+        deviceRed = deviceRed[deviceRed['lof']>self.red]
+        # 3. negative to average based warning
+#        self.deviceYellow = self.deviceYellow[self.deviceYellow['negNum']<4])
+#        self.deviceRed = self.deviceRed[self.deviceRed['negNum']<4])
         
+        # deviceCode
+        self.deviceYellowCode = list(deviceYellow.index)
+        self.deviceRedCode = list(deviceRed.index)
+        self.deviceBlueCode = list(self.potsDf.index)
+        for device in self.deviceYellowCode+self.deviceRedCode:
+            self.deviceBlueCode.remove(device)
+        # lof 
+        deviceYellowLof = list(deviceYellow['lof'])
+        deviceRedLof = list(deviceRed['lof'])
+        deviceBlueLof = []
+        for device in self.deviceBlueCode:
+            deviceBlueLof.append( deviceWarn['lof'][device])
+        self.deviceLof = deviceRedLof + deviceYellowLof + deviceBlueLof
+            
+            
     #normalization
     def normalization(self,arr,arr_max,arr_min):
         for col in range(arr.shape[1]): 
