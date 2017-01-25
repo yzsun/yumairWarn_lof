@@ -37,12 +37,15 @@ def get_device(gridDf,gridIndex):
              "latitudeMax":gridDf['right_up_latitude'][gridIndex]}
     tmp = requests.get(deviceUrl,params=paras)
     tmp = json.loads(tmp.text)
-    deviceCode2Name = {};deviceCode2Site = {}
+    deviceCode2Name = {};deviceCode2Site = {};deviceCode2ID = {}
     for device in tmp:
-        deviceCode2Name[device['deviceCode']]= device['deviceName']
-        deviceCode2Site[device['deviceCode']]= [device['longitude'],device['latitude']]
-    return deviceCode2Name,deviceCode2Name
+        if device['openStatus']==0:
+            deviceCode2Name[device['deviceCode']]= device['deviceName']
+            deviceCode2Site[device['deviceCode']]= [device['longitude'],device['latitude']]
+            deviceCode2ID[device['deviceCode']]= device['id']
+    return deviceCode2Name,deviceCode2Name,deviceCode2ID
 
+    
 def get_data(deviceList,fetchTime): 
     dataUrl = "http://192.168.0.177:10886/v1.1/yumair/statistic/raw"
     data = json.dumps({"dids":','.join(deviceList),
@@ -60,10 +63,11 @@ def get_data(deviceList,fetchTime):
     data = np.reshape(data,(-1,7))
     return data
 
+
 def mainWarn(gridCon,fetchTime,yellow=2.5,red=4,k=2):
     gridDf = get_Grid(gridCon)
     for gridIndex in gridDf.index:
-        deviceCode2Name,deviceCode2Site = get_device(gridDf,gridIndex)
+        deviceCode2Name,deviceCode2Site,deviceCode2ID = get_device(gridDf,gridIndex)
         deviceNum = len(deviceCode2Name)
         dataArr = get_data(deviceCode2Name.keys(),fetchTime)
         dataDf = pd.DataFrame(dataArr,index=deviceCode2Name.keys(),columns=['6','7','8','9','10','11','12'])
@@ -92,21 +96,26 @@ def mainWarn(gridCon,fetchTime,yellow=2.5,red=4,k=2):
         deviceBlueLong = [deviceCode2Site[device][0] for device in deviceBlueCode]
         deviceBlueLat = [deviceCode2Site[device][1] for device in deviceBlueCode]
          
+        # device id
+        deviceYellowID = [deviceCode2ID[device] for device in deviceYellowCode]
+        deviceRedID = [deviceCode2ID[device] for device in deviceRedCode]
+        deviceBlueID = [deviceCode2ID[device] for device in deviceBlueCode]
+
         #devie number
         deviceRedNum = len(deviceRedName)
         deviceYellowNum = len(deviceYellowName)
         deviceBlueNum = len(deviceBlueName)
         deviceNum = deviceRedNum + deviceYellowNum + deviceBlueNum
         
-        ################  save to MySql   ###################
-        saveDf = pd.DataFrame(np.zeros((deviceNum,6)),index=range(deviceNum),
+#        ################  save to MySql   ###################
+        saveDf = pd.DataFrame(np.zeros((deviceNum,7)),index=range(deviceNum),
                               columns=['grid_id','device_name','time','level',\
-                              'longitude','latitude'])
+                              'longitude','latitude','device_id'])
         #gird id
         saveDf['grid_id'] = [gridIndex]*deviceNum
         #current time
         saveDf['time'] = [fetchTime]*deviceNum
-        #deviceName
+        #device name
         deviceName = deviceRedName+deviceYellowName+deviceBlueName
         saveDf['device_name'] = deviceName
         #device warn level
@@ -117,7 +126,9 @@ def mainWarn(gridCon,fetchTime,yellow=2.5,red=4,k=2):
         deviceLat =  deviceRedLat + deviceYellowLat + deviceBlueLat 
         saveDf['longitude'] = deviceLong
         saveDf['latitude'] = deviceLat
-
+        # device id
+        deviceID = deviceRedID + deviceYellowID + deviceBlueID
+        saveDf['device_id'] = deviceID
         pd.io.sql.to_sql(saveDf,"warn",gridCon, flavor='mysql', if_exists='append',index=False)
 
 if __name__ =='__main__':
